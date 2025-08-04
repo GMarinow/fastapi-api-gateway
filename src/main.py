@@ -5,7 +5,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
+from src.api.api_router import router
 from src.core.config import SETTINGS
+from src.models.users_model import UsersModel
 from src.core.logger import create_logger
 
 LOGGER = create_logger(logger_name=SETTINGS.SERVICE_NAME)
@@ -28,8 +30,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         raise
 
     db: AsyncIOMotorDatabase = db_client[SETTINGS.MONGO_DB_NAME]
-    document_models: list = []
-
+    document_models: list = [UsersModel]
+    existing_collections: list[str] = await db.list_collection_names()
+    for collection_name in document_models:
+        if collection_name.Settings.name not in existing_collections:
+            await db.create_collection(collection_name.Settings.name)
+            LOGGER.info(f"Collection {collection_name.Settings.name} created.")
     try:
         await init_beanie(database=db, document_models=document_models)
         LOGGER.info("Beanie initialized successfully.")
@@ -75,3 +81,6 @@ app.add_middleware(
 @app.get("/health", tags=["Health Check"])
 async def health_check() -> dict[str, str]:
     return {"status": "ok"}
+
+
+app.include_router(router, prefix="/api/v1")
